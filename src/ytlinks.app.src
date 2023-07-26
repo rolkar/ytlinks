@@ -1,0 +1,16 @@
+%%-*- mode: erlang -*-
+{application, ytlinks,
+    [ {description, "Reading YouTube links"}
+    , {vsn,        git}
+    , {modules,    []}
+    , {registered, []}
+%%    , {mod,        {ytlink_app, []}}
+    , {env,        []}
+    , {applications,
+            [ kernel
+            , stdlib
+            , redbug
+            ]},
+        {env, []}
+    ]}.
+ 
