@@ -1,17 +1,34 @@
 -module(ytlinks).
 
--export([test/0]).
+-export([test_traverse_add/0,
+	 test_traverse_sum/0,
+	 test_file/0]).
 
-test() ->
+test_traverse_add() ->
+    traverse(base_dir(), fun add/2, []).
+
+test_traverse_sum() ->
+    traverse(base_dir(), fun sum/2, 0).
+
+test_file() ->
     {ok, Url} = parse_url_file(url_test_file()),
     {ok, {{_,200,"OK"}, _, Body}} = httpc:request(Url),
     {ok, {Channel, ChannelOwner}} = find_channel(Body),
     {Url, Channel, ChannelOwner}.
 
+traverse(Dir, Fun, Acc) ->
+    filelib:fold_files(Dir, ".*url", true, Fun, Acc).
+
 parse_url_file(File) ->
     {ok, Content} = file:read_file(File),
     Lines = binary:split(Content, [<<"\n">>, <<"\r">>], [global, trim_all]),
     find_url(Lines).
+
+add(Filename, Acc) ->
+    [Filename | Acc].
+
+sum(_Filename, Acc) ->
+    Acc + 1.
 
 find_url([]) ->
     {error, no_url};
@@ -60,9 +77,12 @@ find_channel_owner(Body) ->
 	    end
     end.
 
+base_dir() ->
+    "/mnt/c/Users/roland/Desktop/musik/".
+
 url_test_file() ->
-    "/mnt/c/Users/roland/Desktop/musik/"
-    "Lovebites/"
-    "reactions/Thunder Vengeance/"
-    "What does SNAKE SABO from SKID ROW think about LOVEBITES-"
-    " - YouTube.url".
+    filename:join([base_dir(),
+		   "Lovebites",
+		   "reactions/Thunder Vengeance",
+		   "What does SNAKE SABO from SKID ROW think about LOVEBITES-"
+		   " - YouTube.url"]).
