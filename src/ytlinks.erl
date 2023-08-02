@@ -2,7 +2,10 @@
 
 -export([test_traverse_add/0,
 	 test_traverse_sum/0,
-	 test_file/0]).
+	 test_file/0,
+	 test_file2/0]).
+
+-export([url_test_file2/0]).
 
 test_traverse_add() ->
     traverse(base_dir(), fun add/2, []).
@@ -12,6 +15,12 @@ test_traverse_sum() ->
 
 test_file() ->
     {ok, Url} = parse_url_file(url_test_file()),
+    {ok, {{_,200,"OK"}, _, Body}} = httpc:request(Url),
+    {ok, {Channel, ChannelOwner}} = find_channel(Body),
+    {Url, Channel, ChannelOwner}.
+
+test_file2() ->
+    {ok, Url} = parse_url_file(url_test_file2()),
     {ok, {{_,200,"OK"}, _, Body}} = httpc:request(Url),
     {ok, {Channel, ChannelOwner}} = find_channel(Body),
     {Url, Channel, ChannelOwner}.
@@ -85,4 +94,11 @@ url_test_file() ->
 		   "Lovebites",
 		   "reactions/Thunder Vengeance",
 		   "What does SNAKE SABO from SKID ROW think about LOVEBITES-"
+		   " - YouTube.url"]).
+
+url_test_file2() ->
+    filename:join([base_dir(),
+		   "BAND-MAID",
+		   "reactions/Domination/Live",
+		   "First Time Hearing Band-Maid 🎵 Domination Reaction"
 		   " - YouTube.url"]).
