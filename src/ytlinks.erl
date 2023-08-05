@@ -42,13 +42,23 @@ analyze_file(Filepath, {BaseLen, Index, Acc}) ->
     {_,RelFilepath} = lists:split(BaseLen, Filepath),
     RelDir = filename:dirname(RelFilepath),
     Filename = filename:basename(RelFilepath, ".url"),
-    [Artist | _] = filename:split(RelDir),
+    {Artist, IsReactions} =
+	case filename:split(RelDir) of
+	    [] ->
+		{"no artist", false};
+	    [Artist0] ->
+		{Artist0, false};
+	    [Artist0, ChildDir | _] ->
+		IsReactions0 = string:equal("reactions", ChildDir),
+		{Artist0, IsReactions0}
+	end,
     Map0 =
 	#{index => Index,
 	  filepath => Filepath,
 	  rel_filepath => RelFilepath,
 	  filename => Filename,
-	  artist => Artist},
+	  artist => Artist,
+	  is_reactions => IsReactions},
     Map =
 	try
 	    {ok, Url} = parse_url_file(Filepath),
@@ -56,7 +66,8 @@ analyze_file(Filepath, {BaseLen, Index, Acc}) ->
 	    try
 		{ok, {Channel, Owner}} = get_channel(Url),
 		erlang:display({ok, {Artist,
-				     Channel}}),
+				     Channel,
+				     IsReactions}}),
 		Map1#{channel => Channel,
 		      owner => Owner}
 	    catch Type:Reason:_Trace ->
