@@ -27,10 +27,10 @@ test_traverse_sum() ->
     traverse(base_dir(), fun sum/2, 0).
 
 test_file() ->
-    read_file(url_test_file()).
+    get_it_all(url_test_file()).
 
 test_file2() ->
-    read_file(url_test_file2()).
+    get_it_all(url_test_file2()).
 
 %% Internal
 
@@ -43,45 +43,58 @@ analyze_file(Filepath, {BaseLen, Index, Acc}) ->
     RelDir = filename:dirname(RelFilepath),
     Filename = filename:basename(RelFilepath, ".url"),
     [Artist | _] = filename:split(RelDir),
+    Map0 =
+	#{index => Index,
+	  filepath => Filepath,
+	  rel_filepath => RelFilepath,
+	  filename => Filename,
+	  artist => Artist},
     Map =
 	try
-	    {Url, Channel, Owner} = read_file(Filepath),
-	    erlang:display({ok, {Artist, Channel}}),
-	    #{index => Index,
-	      filepath => Filepath,
-	      rel_filepath => RelFilepath,
-	      filename => Filename,
-	      artist => Artist,
-	      url => Url,
-	      channel => Channel,
-	      owner => Owner}
-	catch Type:Reason:_Trace ->
-		erlang:display({error, {Artist, Reason, Filename}}),
-		#{index => Index,
-		  filepath => Filepath,
-		  rel_filepath => RelFilepath,
-		  filename => Filename,
-		  artist => Artist,
-		  type => Type,
-		  reason => Reason}
+	    {ok, Url} = parse_url_file(Filepath),
+	    Map1 = Map0#{url => Url},
+	    try
+		{ok, {Channel, Owner}} = get_channel(Url),
+		erlang:display({ok, {Artist,
+				     Channel}}),
+		Map1#{channel => Channel,
+		      owner => Owner}
+	    catch Type:Reason:_Trace ->
+		    erlang:display({error, {channel,
+					    Artist,
+					    Reason,
+					    Filename}}),
+		    Map1#{type => Type,
+			  reason => Reason}
+	    end
+	catch Type2:Reason2:_Trace2 ->
+		erlang:display({error, {url,
+					Artist,
+					Reason2,
+					Filename}}),
+		Map0#{type => Type2,
+		      reason => Reason2}
 	end,
     {BaseLen, Index+1, Acc#{Index => Map}}.
 
-read_file(Filename) ->
-    {ok, Url} = parse_url_file(Filename),
+get_it_all(Filepath) ->
+    {ok, Url} = parse_url_file(Filepath),
+    {ok, {Channel, Owner}} = get_channel(Url),
+    {Url, Channel, Owner}.
+
+get_channel(Url) ->
     {ok, {{_,200,"OK"}, _, Body}} = httpc:request(Url),
-    {ok, {Channel, ChannelOwner}} = find_channel(Body),
-    {Url, Channel, ChannelOwner}.
+    find_channel(Body).
 
 parse_url_file(File) ->
     {ok, Content} = file:read_file(File),
     Lines = binary:split(Content, [<<"\n">>, <<"\r">>], [global, trim_all]),
     find_url(Lines).
 
-add(Filename, Acc) ->
-    [Filename | Acc].
+add(Filepath, Acc) ->
+    [Filepath | Acc].
 
-sum(_Filename, Acc) ->
+sum(_Filepath, Acc) ->
     Acc + 1.
 
 find_url([]) ->
