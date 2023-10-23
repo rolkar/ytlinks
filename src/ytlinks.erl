@@ -18,8 +18,8 @@ run() ->
 
 run(BaseDir) ->
     {US1, {_, Num, Table}} = timer:tc(fun() -> analyze(BaseDir) end),
-    {US2, Index} = timer:tc(fun() -> build_index(Table) end),
-    {US1/1000000, US2/1000000, Num, Table, Index}.
+    {US2, Indices} = timer:tc(fun() -> build_indices(Table) end),
+    {US1/1000000, US2/1000000, Num, Table, Indices}.
 
 analyze() ->
     analyze(base_dir()).
@@ -28,8 +28,21 @@ analyze(BaseDir) ->
     BaseLen = length(BaseDir) + 1,
     traverse(BaseDir, fun analyze_file/2, {BaseLen, 0, #{}}).
 
-build_index(_) ->
-    #{}. %% TODO
+build_indices(DB) ->
+    maps:fold(fun insert_indices/3, #{}, DB).
+
+insert_indices(Num, Map, Indices) ->
+    {Num, NewIndices} =
+	maps:fold(fun insert_index/3, {Num, Indices}, Map),
+    NewIndices.
+
+insert_index(K, V, {Num, OldIndices}) ->  
+    OldMap = maps:get(K, OldIndices, #{}),
+    OldNums = maps:get(V, OldMap, []),
+    NewNums = lists:usort([Num|OldNums]),
+    NewMap = maps:put(V, NewNums, OldMap),
+    NewIndices = maps:put(K, NewMap, OldIndices),
+    {Num, NewIndices}.
 
 %% TEST-API
 
@@ -56,8 +69,8 @@ test_file2() ->
 traverse(Dir, Fun, Acc) ->
     filelib:fold_files(Dir, ".*url", true, Fun, Acc).
 
-analyze_file(Filepath, {BaseLen, Index, Acc}) ->
-    erlang:display(Index),
+analyze_file(Filepath, {BaseLen, Num, Acc}) ->
+    erlang:display(Num),
     {_,RelFilepath} = lists:split(BaseLen, Filepath),
     RelDir = filename:dirname(RelFilepath),
     Filename = filename:basename(RelFilepath, ".url"),
@@ -80,7 +93,7 @@ analyze_file(Filepath, {BaseLen, Index, Acc}) ->
 		end
 	end,
     Map0 =
-	#{index => Index,
+	#{num => Num,
 	  filepath => Filepath,
 	  rel_filepath => RelFilepath,
 	  filename => Filename,
@@ -119,7 +132,7 @@ analyze_file(Filepath, {BaseLen, Index, Acc}) ->
 		      type => Type2,
 		      reason => Reason2}
 	end,
-    {BaseLen, Index+1, Acc#{Index => Map}}.
+    {BaseLen, Num+1, Acc#{Num => Map}}.
 
 get_it_all(Filepath) ->
     {ok, Url} = parse_url_file(Filepath),
