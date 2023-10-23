@@ -1,8 +1,10 @@
 -module(ytlinks).
 
--export([analyze/0, analyze/1]).
+-export([run/0, run/1, analyze/0, analyze/1]).
 
--export([test_traverse_add/0,
+-export([test_run/0,
+	 test_analyze/0,
+	 test_traverse_add/0,
 	 test_traverse_sum/0,
 	 test_file/0,
 	 test_file2/0]).
@@ -11,14 +13,31 @@
 
 %% API
 
+run() ->
+    run(base_dir()).
+
+run(BaseDir) ->
+    {US1, {_, Num, Table}} = timer:tc(fun() -> analyze(BaseDir) end),
+    {US2, Index} = timer:tc(fun() -> build_index(Table) end),
+    {US1/1000000, US2/1000000, Num, Table, Index}.
+
 analyze() ->
     analyze(base_dir()).
 
 analyze(BaseDir) ->
     BaseLen = length(BaseDir) + 1,
-    traverse(base_dir(), fun analyze_file/2, {BaseLen, 0, #{}}).
+    traverse(BaseDir, fun analyze_file/2, {BaseLen, 0, #{}}).
+
+build_index(_) ->
+    #{}. %% TODO
 
 %% TEST-API
+
+test_run() ->
+    run(test_base_dir()).
+
+test_analyze() ->
+    analyze(test_base_dir()).
 
 test_traverse_add() ->
     traverse(base_dir(), fun add/2, []).
@@ -42,15 +61,23 @@ analyze_file(Filepath, {BaseLen, Index, Acc}) ->
     {_,RelFilepath} = lists:split(BaseLen, Filepath),
     RelDir = filename:dirname(RelFilepath),
     Filename = filename:basename(RelFilepath, ".url"),
-    {Artist, IsReactions} =
+    {Artist, IsReaction, MaybeSong} =
 	case filename:split(RelDir) of
 	    [] ->
-		{"no artist", false};
+		{"", false, ""};
 	    [Artist0] ->
-		{Artist0, false};
-	    [Artist0, ChildDir | _] ->
-		IsReactions0 = string:equal("reactions", ChildDir),
-		{Artist0, IsReactions0}
+		{Artist0, false, ""};
+	    [Artist0, ChildDir | Rest] ->
+		case {string:equal("reactions", ChildDir), Rest} of
+		    {true, []} ->
+			{Artist0, true, ""};
+		    {true, Rest} ->
+			MaybeSong0 = filename:join(Rest),
+			{Artist0, true, MaybeSong0};
+		    {false, Rest} ->
+			MaybeSong0 = filename:join([ChildDir|Rest]),
+			{Artist0, false, MaybeSong0}
+		end
 	end,
     Map0 =
 	#{index => Index,
@@ -58,7 +85,8 @@ analyze_file(Filepath, {BaseLen, Index, Acc}) ->
 	  rel_filepath => RelFilepath,
 	  filename => Filename,
 	  artist => Artist,
-	  is_reactions => IsReactions},
+	  is_reaction => IsReaction,
+	  maybe_song => MaybeSong},
     Map =
 	try
 	    {ok, Url} = parse_url_file(Filepath),
@@ -67,23 +95,28 @@ analyze_file(Filepath, {BaseLen, Index, Acc}) ->
 		{ok, {Channel, Owner}} = get_channel(Url),
 		erlang:display({ok, {Artist,
 				     Channel,
-				     IsReactions}}),
-		Map1#{channel => Channel,
+				     MaybeSong,
+				     IsReaction}}),
+		Map1#{result => ok,
+		      channel => Channel,
 		      owner => Owner}
 	    catch Type:Reason:_Trace ->
-		    erlang:display({error, {channel,
+		    erlang:display({error, {channel_failed,
+					    Url,
 					    Artist,
 					    Reason,
 					    Filename}}),
-		    Map1#{type => Type,
+		    Map1#{result => channel_failed,
+			  type => Type,
 			  reason => Reason}
 	    end
 	catch Type2:Reason2:_Trace2 ->
-		erlang:display({error, {url,
+		erlang:display({error, {url_failed,
 					Artist,
 					Reason2,
 					Filename}}),
-		Map0#{type => Type2,
+		Map0#{result => url_failed,
+		      type => Type2,
 		      reason => Reason2}
 	end,
     {BaseLen, Index+1, Acc#{Index => Map}}.
@@ -94,8 +127,14 @@ get_it_all(Filepath) ->
     {Url, Channel, Owner}.
 
 get_channel(Url) ->
-    {ok, {{_,200,"OK"}, _, Body}} = httpc:request(Url),
-    find_channel(Body).
+    case httpc:request(Url) of
+	{ok, {{_,200,"OK"}, _, Body}} ->
+	    find_channel(Body);
+	{ok, {{_,Reply,_}, _, _}} ->
+	    {error, {http_reply, Reply}};
+	_ ->
+	    {error, http_failed}
+    end.
 
 parse_url_file(File) ->
     {ok, Content} = file:read_file(File),
@@ -157,6 +196,9 @@ find_channel_owner(Body) ->
 
 base_dir() ->
     "/mnt/c/Users/roland/Desktop/musik".
+
+test_base_dir() ->
+    "./test_base_dir".
 
 url_test_file() ->
     filename:join([base_dir(),
