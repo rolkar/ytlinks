@@ -17,9 +17,9 @@ run() ->
     run(base_dir()).
 
 run(BaseDir) ->
-    {US1, {_, Num, Table}} = timer:tc(fun() -> analyze(BaseDir) end),
+    {US1, {_, Num, Table, Cache}} = timer:tc(fun() -> analyze(BaseDir) end),
     {US2, Indices} = timer:tc(fun() -> build_indices(Table) end),
-    {US1/1000000, US2/1000000, Num, Table, Indices}.
+    {US1/1000000, US2/1000000, Num, Table, Cache, Indices}.
 
 analyze() ->
     analyze(base_dir()).
@@ -69,7 +69,7 @@ test_file2() ->
 traverse(Dir, Fun, Acc) ->
     filelib:fold_files(Dir, ".*url", true, Fun, Acc).
 
-analyze_file(Filepath, {BaseLen, Num, Cache, Acc}) ->
+analyze_file(Filepath, {BaseLen, Num, Acc, Cache}) ->
     erlang:display(Num),
     {_,RelFilepath} = lists:split(BaseLen, Filepath),
     RelDir = filename:dirname(RelFilepath),
@@ -103,30 +103,27 @@ analyze_file(Filepath, {BaseLen, Num, Cache, Acc}) ->
     case parse_url_file(Filepath) of
 	{ok, Url} ->
 	    Map1 = Map0#{url => Url},
-	    {Map, NewCache} =
+	    CachedItem =
 		case get_channel(Url) of
 		    {ok, {Channel, Owner}} ->
 			erlang:display({ok, {Artist,
 					     Channel,
 					     MaybeSong,
 					     IsReaction}}),
-			CachedItem =
-			    #{channel => Channel,
-			      owner => Owner},
-			Map2 =
-			    (maps:merge(Map1, CachedItem))#{result => ok},
-			{Map2, Cache#{Url => CachedItem}};
+			#{result => ok,
+			  channel => Channel,
+			  owner => Owner};
 		    {error, Reason} ->
 			erlang:display({error, {channel_failed,
 						Url,
 						Artist,
 						Reason,
 						Filename}}),
-			Map2 =
-			    #{result => channel_failed,
-			      reason => Reason},
-			{Map2, Cache}
+			#{result => channel_failed,
+			  reason => Reason}
 		end,
+	    Map = maps:merge(Map1, CachedItem),
+	    NewCache = Cache#{Url => CachedItem},
 	    {BaseLen , Num+1, Acc#{Num => Map}, NewCache};
 	{error, Reason} ->
 	    erlang:display({error, {url_failed,
