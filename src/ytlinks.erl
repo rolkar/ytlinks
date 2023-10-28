@@ -26,7 +26,7 @@ analyze() ->
 
 analyze(BaseDir) ->
     BaseLen = length(BaseDir) + 1,
-    traverse(BaseDir, fun analyze_file/2, {BaseLen, 0, #{}}).
+    traverse(BaseDir, fun analyze_file/2, {BaseLen, 0, #{}, #{}}).
 
 build_indices(DB) ->
     maps:fold(fun insert_indices/3, #{}, DB).
@@ -69,7 +69,7 @@ test_file2() ->
 traverse(Dir, Fun, Acc) ->
     filelib:fold_files(Dir, ".*url", true, Fun, Acc).
 
-analyze_file(Filepath, {BaseLen, Num, Acc}) ->
+analyze_file(Filepath, {BaseLen, Num, Cache, Acc}) ->
     erlang:display(Num),
     {_,RelFilepath} = lists:split(BaseLen, Filepath),
     RelDir = filename:dirname(RelFilepath),
@@ -100,39 +100,42 @@ analyze_file(Filepath, {BaseLen, Num, Acc}) ->
 	  artist => Artist,
 	  is_reaction => IsReaction,
 	  maybe_song => MaybeSong},
-    Map =
-	try
-	    {ok, Url} = parse_url_file(Filepath),
+    case parse_url_file(Filepath) of
+	{ok, Url} ->
 	    Map1 = Map0#{url => Url},
-	    try
-		{ok, {Channel, Owner}} = get_channel(Url),
-		erlang:display({ok, {Artist,
-				     Channel,
-				     MaybeSong,
-				     IsReaction}}),
-		Map1#{result => ok,
-		      channel => Channel,
-		      owner => Owner}
-	    catch Type:Reason:_Trace ->
-		    erlang:display({error, {channel_failed,
-					    Url,
-					    Artist,
-					    Reason,
-					    Filename}}),
-		    Map1#{result => channel_failed,
-			  type => Type,
-			  reason => Reason}
-	    end
-	catch Type2:Reason2:_Trace2 ->
-		erlang:display({error, {url_failed,
-					Artist,
-					Reason2,
-					Filename}}),
-		Map0#{result => url_failed,
-		      type => Type2,
-		      reason => Reason2}
-	end,
-    {BaseLen, Num+1, Acc#{Num => Map}}.
+	    {Map, NewCache} =
+		case get_channel(Url) of
+		    {ok, {Channel, Owner}} ->
+			erlang:display({ok, {Artist,
+					     Channel,
+					     MaybeSong,
+					     IsReaction}}),
+			CachedItem =
+			    #{channel => Channel,
+			      owner => Owner},
+			Map2 =
+			    (maps:merge(Map1, CachedItem))#{result => ok},
+			{Map2, Cache#{Url => CachedItem}};
+		    {error, Reason} ->
+			erlang:display({error, {channel_failed,
+						Url,
+						Artist,
+						Reason,
+						Filename}}),
+			Map2 =
+			    #{result => channel_failed,
+			      reason => Reason},
+			{Map2, Cache}
+		end,
+	    {BaseLen , Num+1, Acc#{Num => Map}, NewCache};
+	{error, Reason} ->
+	    erlang:display({error, {url_failed,
+				    Artist,
+				    Reason,
+				    Filename}}),
+	    Map0#{result => url_failed,
+		  reason => Reason}
+    end.
 
 get_it_all(Filepath) ->
     {ok, Url} = parse_url_file(Filepath),
