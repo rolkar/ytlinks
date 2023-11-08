@@ -17,16 +17,23 @@ run() ->
     run(base_dir()).
 
 run(BaseDir) ->
-    {US1, {_, Num, Table, Cache}} = timer:tc(fun() -> analyze(BaseDir) end),
+    {US1, {_, Num, Table, Cache, ErrorCache}} =
+	timer:tc(fun() -> analyze(BaseDir) end),
     {US2, Indices} = timer:tc(fun() -> build_indices(Table) end),
-    {US1/1000000, US2/1000000, Num, Table, Cache, Indices}.
+    #{analyze_time => US1/1000000,
+      build_indices_time => US2/1000000,
+      num => Num,
+      table => Table,
+      cache => Cache,
+      error_cache => ErrorCache,
+      indices => Indices}.
 
 analyze() ->
     analyze(base_dir()).
 
 analyze(BaseDir) ->
     BaseLen = length(BaseDir) + 1,
-    traverse(BaseDir, fun analyze_file/2, {BaseLen, 0, #{}, #{}}).
+    traverse(BaseDir, fun analyze_file/2, {BaseLen, 0, #{}, #{}, #{}}).
 
 build_indices(DB) ->
     maps:fold(fun insert_indices/3, #{}, DB).
@@ -69,7 +76,7 @@ test_file2() ->
 traverse(Dir, Fun, Acc) ->
     filelib:fold_files(Dir, ".*url", true, Fun, Acc).
 
-analyze_file(Filepath, {BaseLen, Num, Acc, Cache}) ->
+analyze_file(Filepath, {BaseLen, Num, Acc, Cache, ErrorCache}) ->
     erlang:display(Num),
     {_,RelFilepath} = lists:split(BaseLen, Filepath),
     RelDir = filename:dirname(RelFilepath),
@@ -103,28 +110,34 @@ analyze_file(Filepath, {BaseLen, Num, Acc, Cache}) ->
     case parse_url_file(Filepath) of
 	{ok, Url} ->
 	    Map1 = Map0#{url => Url},
-	    CachedItem =
+	    {Result, CachedItem} =
 		case get_channel(Url) of
 		    {ok, {Channel, Owner}} ->
 			erlang:display({ok, {Artist,
 					     Channel,
 					     MaybeSong,
 					     IsReaction}}),
-			#{result => ok,
-			  channel => Channel,
-			  owner => Owner};
+			{ok, #{result => ok,
+			       channel => Channel,
+			       owner => Owner}};
 		    {error, Reason} ->
 			erlang:display({error, {channel_failed,
 						Url,
 						Artist,
 						Reason,
 						Filename}}),
-			#{result => channel_failed,
-			  reason => Reason}
+			{error, #{result => channel_failed,
+				  reason => Reason}}
 		end,
 	    Map = maps:merge(Map1, CachedItem),
-	    NewCache = Cache#{Url => CachedItem},
-	    {BaseLen , Num+1, Acc#{Num => Map}, NewCache};
+	    {NewCache, NewErrorCache} =
+		case Result of
+		    ok ->
+			{Cache#{Url => CachedItem}, ErrorCache};
+		    error ->
+			{Cache, ErrorCache#{Url => CachedItem}}
+		end,
+	    {BaseLen , Num+1, Acc#{Num => Map}, NewCache, NewErrorCache};
 	{error, Reason} ->
 	    erlang:display({error, {url_failed,
 				    Artist,
