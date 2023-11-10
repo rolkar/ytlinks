@@ -9,8 +9,7 @@
     , {applications,
             [ kernel
             , stdlib
-            , redbug
+            , jsx
             ]},
         {env, []}
     ]}.
- 
