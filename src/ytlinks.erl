@@ -17,15 +17,18 @@ run() ->
     run(base_dir()).
 
 run(BaseDir) ->
+    CacheJsonFile = filename:join([BaseDir, "cache.json"]),
+    ErrorCacheJsonFile = filename:join([BaseDir, "error_cache.json"]),
+
     {US1, {_, Num, Table, Cache, ErrorCache}} =
 	timer:tc(fun() -> analyze(BaseDir) end),
     {US2, Indices} = timer:tc(fun() -> build_indices(Table) end),
+
     CacheJson = jsx:prettify(jsx:encode(Cache)),
     ErrorCacheJson = jsx:prettify(jsx:encode(ErrorCache)),
-    CacheJsonFile = filename:join([BaseDir, cache]),
-    ErrorCacheJsonFile = filename:join([BaseDir, error_cache]),
     file:write_file(CacheJsonFile, CacheJson),
     file:write_file(ErrorCacheJsonFile, ErrorCacheJson),
+
     #{analyze_time => US1/1000000,
       build_indices_time => US2/1000000,
       num => Num,
