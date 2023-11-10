@@ -20,6 +20,12 @@ run(BaseDir) ->
     {US1, {_, Num, Table, Cache, ErrorCache}} =
 	timer:tc(fun() -> analyze(BaseDir) end),
     {US2, Indices} = timer:tc(fun() -> build_indices(Table) end),
+    CacheJson = jsx:prettify(jsx:encode(Cache)),
+    ErrorCacheJson = jsx:prettify(jsx:encode(ErrorCache)),
+    CacheJsonFile = filename:join([BaseDir, cache]),
+    ErrorCacheJsonFile = filename:join([BaseDir, error_cache]),
+    file:write_file(CacheJsonFile, CacheJson),
+    file:write_file(ErrorCacheJsonFile, ErrorCacheJson),
     #{analyze_time => US1/1000000,
       build_indices_time => US2/1000000,
       num => Num,
@@ -157,7 +163,7 @@ get_channel(Url) ->
 	{ok, {{_,200,"OK"}, _, Body}} ->
 	    find_channel(Body);
 	{ok, {{_,Reply,_}, _, _}} ->
-	    {error, {http_reply, Reply}};
+	    {error, #{http_reply => Reply}};
 	_ ->
 	    {error, http_failed}
     end.
@@ -198,7 +204,7 @@ find_channel(Body) ->
 		M ->
 		    Channel = lists:sublist(Rest, 1, M-1),
 		    {ok, ChannelOwner} = find_channel_owner(Rest),
-		    {ok, {Channel, ChannelOwner}}
+		    {ok, {list_to_binary(Channel), list_to_binary(ChannelOwner)}}
 	    end
     end.
 

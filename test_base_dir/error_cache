@@ -1,0 +1,6 @@
+{
+  "https://www.youtube.com/watch?v=xxxxxxxxxxx": {
+    "reason": "no_channel",
+    "result": "channel_failed"
+  }
+}
