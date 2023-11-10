@@ -17,6 +17,8 @@ run() ->
     run(base_dir()).
 
 run(BaseDir) ->
+    TableJsonFile = filename:join([BaseDir, "table.json"]),
+    IndicesJsonFile = filename:join([BaseDir, "indices.json"]),
     CacheJsonFile = filename:join([BaseDir, "cache.json"]),
     ErrorCacheJsonFile = filename:join([BaseDir, "error_cache.json"]),
 
@@ -24,8 +26,13 @@ run(BaseDir) ->
 	timer:tc(fun() -> analyze(BaseDir) end),
     {US2, Indices} = timer:tc(fun() -> build_indices(Table) end),
 
+    TableJson = jsx:prettify(jsx:encode(Table)),
+    IndicesJson = jsx:prettify(jsx:encode(Indices)),
     CacheJson = jsx:prettify(jsx:encode(Cache)),
     ErrorCacheJson = jsx:prettify(jsx:encode(ErrorCache)),
+
+    file:write_file(TableJsonFile, TableJson),
+    file:write_file(IndicesJsonFile, IndicesJson),
     file:write_file(CacheJsonFile, CacheJson),
     file:write_file(ErrorCacheJsonFile, ErrorCacheJson),
 
@@ -83,7 +90,7 @@ test_file2() ->
 %% Internal
 
 traverse(Dir, Fun, Acc) ->
-    filelib:fold_files(Dir, ".*url", true, Fun, Acc).
+    filelib:fold_files(Dir, ".*\.url$", true, Fun, Acc).
 
 analyze_file(Filepath, {BaseLen, Num, Acc, Cache, ErrorCache}) ->
     erlang:display(Num),
@@ -110,12 +117,12 @@ analyze_file(Filepath, {BaseLen, Num, Acc, Cache, ErrorCache}) ->
 	end,
     Map0 =
 	#{num => Num,
-	  filepath => Filepath,
-	  rel_filepath => RelFilepath,
-	  filename => Filename,
-	  artist => Artist,
+	  filepath => unicode:characters_to_binary(Filepath),
+	  rel_filepath => unicode:characters_to_binary(RelFilepath),
+	  filename => unicode:characters_to_binary(Filename),
+	  artist => unicode:characters_to_binary(Artist),
 	  is_reaction => IsReaction,
-	  maybe_song => MaybeSong},
+	  maybe_song => unicode:characters_to_binary(MaybeSong)},
     case parse_url_file(Filepath) of
 	{ok, Url} ->
 	    Map1 = Map0#{url => Url},
@@ -207,7 +214,7 @@ find_channel(Body) ->
 		M ->
 		    Channel = lists:sublist(Rest, 1, M-1),
 		    {ok, ChannelOwner} = find_channel_owner(Rest),
-		    {ok, {list_to_binary(Channel), list_to_binary(ChannelOwner)}}
+		    {ok, {unicode:characters_to_binary(Channel), unicode:characters_to_binary(ChannelOwner)}}
 	    end
     end.
 
