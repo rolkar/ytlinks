@@ -174,6 +174,20 @@ get_it_all(Filepath) ->
     {Url, Channel, Owner}.
 
 get_channel(Url) ->
+    get_channel(Url, #{}, #{}).
+
+get_channel(Url, Cache, ErrorCache) ->
+    case get_cached_channel(Url, Cache, ErrorCache) of
+	notfound ->
+	    get_channel_remote(Url);
+	{cached, Result} ->
+	    {cached, Result}
+    end.
+
+get_cached_channel(_Url, _Cache, _ErrorCache) ->
+    notfound. %% TODO
+
+get_channel_remote(Url) ->
     case httpc:request(Url) of
 	{ok, {{_,200,"OK"}, _, Body}} ->
 	    find_channel(Body);
