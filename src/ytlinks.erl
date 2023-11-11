@@ -25,11 +25,8 @@ run(BaseDir) ->
     Cache0 = read_json(CacheJsonFile),
     ErrorCache0 = read_json(ErrorCacheJsonFile),
 
-    erlang:display(Cache0),
-    erlang:display(ErrorCache0),
-
     {US1, {_, Num, Table, Cache, ErrorCache}} =
-	timer:tc(fun() -> analyze(BaseDir) end),
+	timer:tc(fun() -> analyze(BaseDir, Cache0, ErrorCache0) end),
     {US2, Indices} = timer:tc(fun() -> build_indices(Table) end),
 
     write_json(TableJsonFile, Table),
@@ -49,8 +46,11 @@ analyze() ->
     analyze(base_dir()).
 
 analyze(BaseDir) ->
+    analyze(BaseDir, #{}, #{}).
+
+analyze(BaseDir, Cache, ErrorCache) ->
     BaseLen = length(BaseDir) + 1,
-    traverse(BaseDir, fun analyze_file/2, {BaseLen, 0, #{}, #{}, #{}}).
+    traverse(BaseDir, fun analyze_file/2, {BaseLen, 0, #{}, Cache, ErrorCache}).
 
 build_indices(DB) ->
     maps:fold(fun insert_indices/3, #{}, DB).
@@ -127,32 +127,36 @@ analyze_file(Filepath, {BaseLen, Num, Acc, Cache, ErrorCache}) ->
     case parse_url_file(Filepath) of
 	{ok, Url} ->
 	    Map1 = Map0#{url => Url},
-	    {Result, CachedItem} =
+	    {CacheWhere, CachedItem} =
 		case get_channel(Url) of
 		    {ok, {Channel, Owner}} ->
 			erlang:display({ok, {Artist,
 					     Channel,
 					     MaybeSong,
 					     IsReaction}}),
-			{ok, #{result => ok,
-			       channel => Channel,
-			       owner => Owner}};
+			{cache,
+			 #{result => ok,
+			   channel => Channel,
+			   owner => Owner}};
 		    {error, Reason} ->
 			erlang:display({error, {channel_failed,
 						Url,
 						Artist,
 						Reason,
 						Filename}}),
-			{error, #{result => channel_failed,
-				  reason => Reason}}
+			{error_cache,
+			 #{result => channel_failed,
+			   reason => Reason}}
 		end,
 	    Map = maps:merge(Map1, CachedItem),
 	    {NewCache, NewErrorCache} =
-		case Result of
-		    ok ->
+		case CacheWhere of
+		    cache ->
 			{Cache#{Url => CachedItem}, ErrorCache};
-		    error ->
-			{Cache, ErrorCache#{Url => CachedItem}}
+		    error_cache ->
+			{Cache, ErrorCache#{Url => CachedItem}};
+		    nowhere ->
+			{Cache, ErrorCache}
 		end,
 	    {BaseLen , Num+1, Acc#{Num => Map}, NewCache, NewErrorCache};
 	{error, Reason} ->
@@ -245,7 +249,7 @@ read_json(File) ->
 		    erlang:display({parsing_json_failed, File}),
 		    #{}
 	    end;
-	{error, Reason} ->
+	{error, _} ->
 	    erlang:display({no_json_file, File}),
 	    #{}
     end.
