@@ -26,15 +26,10 @@ run(BaseDir) ->
 	timer:tc(fun() -> analyze(BaseDir) end),
     {US2, Indices} = timer:tc(fun() -> build_indices(Table) end),
 
-    TableJson = jsx:prettify(jsx:encode(Table)),
-    IndicesJson = jsx:prettify(jsx:encode(Indices)),
-    CacheJson = jsx:prettify(jsx:encode(Cache)),
-    ErrorCacheJson = jsx:prettify(jsx:encode(ErrorCache)),
-
-    file:write_file(TableJsonFile, TableJson),
-    file:write_file(IndicesJsonFile, IndicesJson),
-    file:write_file(CacheJsonFile, CacheJson),
-    file:write_file(ErrorCacheJsonFile, ErrorCacheJson),
+    write_json(TableJsonFile, Table),
+    write_json(IndicesJsonFile, Indices),
+    write_json(CacheJsonFile, Cache),
+    write_json(ErrorCacheJsonFile, ErrorCache),
 
     #{analyze_time => US1/1000000,
       build_indices_time => US2/1000000,
@@ -235,6 +230,10 @@ find_channel_owner(Body) ->
 		    {ok, ChannelOwner}
 	    end
     end.
+
+write_json(File, Data) ->
+    Json = jsx:prettify(jsx:encode(Data)),
+    file:write_file(File, Json).
 
 base_dir() ->
     "/mnt/c/Users/roland/Desktop/musik".
