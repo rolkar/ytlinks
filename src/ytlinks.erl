@@ -22,6 +22,12 @@ run(BaseDir) ->
     CacheJsonFile = filename:join([BaseDir, "cache.json"]),
     ErrorCacheJsonFile = filename:join([BaseDir, "error_cache.json"]),
 
+    Cache0 = read_json(CacheJsonFile),
+    ErrorCache0 = read_json(ErrorCacheJsonFile),
+
+    erlang:display(Cache0),
+    erlang:display(ErrorCache0),
+
     {US1, {_, Num, Table, Cache, ErrorCache}} =
 	timer:tc(fun() -> analyze(BaseDir) end),
     {US2, Indices} = timer:tc(fun() -> build_indices(Table) end),
@@ -229,6 +235,19 @@ find_channel_owner(Body) ->
 		    ChannelOwner = lists:sublist(Rest, 1, M-1),
 		    {ok, ChannelOwner}
 	    end
+    end.
+
+read_json(File) ->
+    case file:read_file(File) of
+	{ok, Json} ->
+	    try jsx:decode(Json)
+	    catch _:_ ->
+		    erlang:display({parsing_json_failed, File}),
+		    #{}
+	    end;
+	{error, Reason} ->
+	    erlang:display({no_json_file, File}),
+	    #{}
     end.
 
 write_json(File, Data) ->
