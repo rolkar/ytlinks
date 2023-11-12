@@ -149,7 +149,10 @@ analyze_file(Filepath, {BaseLen, Num, Acc, Cache, ErrorCache}) ->
 						Reason}}),
 			{error_cache,
 			 #{result => channel_failed,
-			   reason => Reason}}
+			   reason => Reason,
+			   %% Two duplicates to help error searching
+			   num => Num,
+			   rel_filepath => unicode:characters_to_binary(RelFilepath)}}
 		end,
 	    Map = maps:merge(Map1, CachedItem),
 	    {NewCache, NewErrorCache} =
@@ -205,7 +208,8 @@ get_channel_remote(Url) ->
 	{ok, {{_,200,"OK"}, _, Body}} ->
 	    find_channel(Body);
 	{ok, {{_,Reply,_}, _, _}} ->
-	    {error, #{http_reply => Reply}};
+	    ReplyBinary = integer_to_binary(Reply),
+	    {error, <<"http_reply_", ReplyBinary/binary>>};
 	_ ->
 	    {error, http_failed}
     end.
