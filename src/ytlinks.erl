@@ -203,7 +203,7 @@ get_cached_channel(Url, Cache, ErrorCache) ->
 	    {cached, Result}
     end.
 
-get_channel_remote(Url) ->
+get_channel_remote(<<"https://www.youtube.com/", _/binary>> = Url) ->
     case httpc:request(Url) of
 	{ok, {{_,200,"OK"}, _, Body}} ->
 	    find_channel(Body);
@@ -212,7 +212,9 @@ get_channel_remote(Url) ->
 	    {error, <<"http_reply_", ReplyBinary/binary>>};
 	_ ->
 	    {error, http_failed}
-    end.
+    end;
+get_channel_remote(_Url) ->
+    {error, not_youtube}.
 
 parse_url_file(File) ->
     {ok, Content} = file:read_file(File),
