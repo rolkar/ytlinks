@@ -146,8 +146,7 @@ analyze_file(Filepath, {BaseLen, Num, Acc, Cache, ErrorCache}) ->
 			erlang:display({error, {channel_failed,
 						Url,
 						Artist,
-						Reason,
-						Filename}}),
+						Reason}}),
 			{error_cache,
 			 #{result => channel_failed,
 			   reason => Reason}}
