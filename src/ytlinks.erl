@@ -128,7 +128,11 @@ analyze_file(Filepath, {BaseLen, Num, Acc, Cache, ErrorCache}) ->
 	{ok, Url} ->
 	    Map1 = Map0#{url => Url},
 	    {CacheWhere, CachedItem} =
-		case get_channel(Url) of
+		case get_channel(Url, Cache, ErrorCache) of
+		    {cached, Item} ->
+			erlang:display({cached, Item}),
+			{nowhere,
+			 Item};
 		    {ok, {Channel, Owner}} ->
 			erlang:display({ok, {Artist,
 					     Channel,
@@ -184,8 +188,18 @@ get_channel(Url, Cache, ErrorCache) ->
 	    {cached, Result}
     end.
 
-get_cached_channel(_Url, _Cache, _ErrorCache) ->
-    notfound. %% TODO
+get_cached_channel(Url, Cache, ErrorCache) ->
+    case maps:get(Url, Cache, notfound) of
+	notfound ->
+	    case maps:get(Url, ErrorCache, notfound) of
+		notfound ->
+		    notfound;
+		Result ->
+		    {cached, Result}
+	    end;
+	Result ->
+	    {cached, Result}
+    end.
 
 get_channel_remote(Url) ->
     case httpc:request(Url) of
