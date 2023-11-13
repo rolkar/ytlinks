@@ -34,13 +34,13 @@ run(BaseDir) ->
     write_json(CacheJsonFile, Cache),
     write_json(ErrorCacheJsonFile, ErrorCache),
 
-    #{analyze_time => US1/1000000,
-      build_indices_time => US2/1000000,
-      num => Num,
-      table => Table,
-      cache => Cache,
-      error_cache => ErrorCache,
-      indices => Indices}.
+    #{<<"analyze_time">> => US1/1000000,
+      <<"build_indices_time">> => US2/1000000,
+      <<"num">> => Num,
+      <<"table">> => Table,
+      <<"cache">> => Cache,
+      <<"error_cache">> => ErrorCache,
+      <<"indices">> => Indices}.
 
 analyze() ->
     analyze(base_dir()).
@@ -101,32 +101,33 @@ analyze_file(Filepath, {BaseLen, Num, Acc, Cache, ErrorCache}) ->
     {Artist, IsReaction, MaybeSong} =
 	case filename:split(RelDir) of
 	    [] ->
-		{"", false, ""};
+		{"", <<"false">>, ""};
 	    [Artist0] ->
-		{Artist0, false, ""};
+		{Artist0, <<"false">>, ""};
 	    [Artist0, ChildDir | Rest] ->
 		case {string:equal("reactions", ChildDir), Rest} of
 		    {true, []} ->
-			{Artist0, true, ""};
+			{Artist0, <<"true">>, ""};
 		    {true, Rest} ->
 			MaybeSong0 = filename:join(Rest),
-			{Artist0, true, MaybeSong0};
+			{Artist0, <<"true">>, MaybeSong0};
 		    {false, Rest} ->
 			MaybeSong0 = filename:join([ChildDir|Rest]),
-			{Artist0, false, MaybeSong0}
+			{Artist0, <<"false">>, MaybeSong0}
 		end
 	end,
+    BinaryNum = integer_to_binary(Num),
     Map0 =
-	#{num => Num,
-	  filepath => unicode:characters_to_binary(Filepath),
-	  rel_filepath => unicode:characters_to_binary(RelFilepath),
-	  filename => unicode:characters_to_binary(Filename),
-	  artist => unicode:characters_to_binary(Artist),
-	  is_reaction => IsReaction,
-	  maybe_song => unicode:characters_to_binary(MaybeSong)},
+	#{<<"num">> => BinaryNum,
+	  <<"filepath">> => unicode:characters_to_binary(Filepath),
+	  <<"rel_filepath">> => unicode:characters_to_binary(RelFilepath),
+	  <<"filename">> => unicode:characters_to_binary(Filename),
+	  <<"artist">> => unicode:characters_to_binary(Artist),
+	  <<"is_reaction">> => IsReaction,
+	  <<"maybe_song">> => unicode:characters_to_binary(MaybeSong)},
     case parse_url_file(Filepath) of
 	{ok, Url} ->
-	    Map1 = Map0#{url => Url},
+	    Map1 = Map0#{<<"url">> => Url},
 	    {CacheWhere, CachedItem} =
 		case get_channel(Url, Cache, ErrorCache) of
 		    {cached, Item} ->
@@ -139,20 +140,20 @@ analyze_file(Filepath, {BaseLen, Num, Acc, Cache, ErrorCache}) ->
 					     MaybeSong,
 					     IsReaction}}),
 			{cache,
-			 #{result => ok,
-			   channel => Channel,
-			   owner => Owner}};
+			 #{<<"result">> => ok,
+			   <<"channel">> => Channel,
+			   <<"owner">> => Owner}};
 		    {error, Reason} ->
 			erlang:display({error, {channel_failed,
 						Url,
 						Artist,
 						Reason}}),
 			{error_cache,
-			 #{result => channel_failed,
-			   reason => Reason,
+			 #{<<"result">> => channel_failed,
+			   <<"reason">> => Reason,
 			   %% Two duplicates to help error searching
-			   num => Num,
-			   rel_filepath => unicode:characters_to_binary(RelFilepath)}}
+			   <<"num">> => BinaryNum,
+			   <<"rel_filepath">> => unicode:characters_to_binary(RelFilepath)}}
 		end,
 	    Map = maps:merge(Map1, CachedItem),
 	    {NewCache, NewErrorCache} =
@@ -164,14 +165,14 @@ analyze_file(Filepath, {BaseLen, Num, Acc, Cache, ErrorCache}) ->
 		    nowhere ->
 			{Cache, ErrorCache}
 		end,
-	    {BaseLen , Num+1, Acc#{Num => Map}, NewCache, NewErrorCache};
+	    {BaseLen , Num+1, Acc#{BinaryNum => Map}, NewCache, NewErrorCache};
 	{error, Reason} ->
 	    erlang:display({error, {url_failed,
 				    Artist,
 				    Reason,
 				    Filename}}),
-	    Map0#{result => url_failed,
-		  reason => Reason}
+	    Map0#{<<"result">> => url_failed,
+		  <<"reason">> => Reason}
     end.
 
 get_it_all(Filepath) ->
