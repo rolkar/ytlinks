@@ -131,7 +131,7 @@ analyze_file(Filepath, {BaseLen, Num, Acc, Cache, ErrorCache}) ->
 	    {CacheWhere, CachedItem} =
 		case get_channel(Url, Cache, ErrorCache) of
 		    {cached, Item} ->
-			erlang:display({cached, Item}),
+			%% erlang:display({cached, Item}),
 			{nowhere,
 			 Item};
 		    {ok, {Channel, Owner}} ->
@@ -243,7 +243,8 @@ find_channel(Body) ->
     PL = length(StartPattern),
     case string:str(Body, StartPattern) of
 	0 ->
-	    {error, no_channel};
+	    Reason = find_error_reason(Body),
+	    {error, Reason};
 	N ->
 	    Rest = lists:sublist(Body, N+PL, 1000),
 	    EndPattern = "\"}",
@@ -253,7 +254,8 @@ find_channel(Body) ->
 		M ->
 		    Channel = lists:sublist(Rest, 1, M-1),
 		    {ok, ChannelOwner} = find_channel_owner(Rest),
-		    {ok, {unicode:characters_to_binary(Channel), unicode:characters_to_binary(ChannelOwner)}}
+		    {ok, {unicode:characters_to_binary(Channel),
+			  unicode:characters_to_binary(ChannelOwner)}}
 	    end
     end.
 
@@ -273,6 +275,49 @@ find_channel_owner(Body) ->
 		    ChannelOwner = lists:sublist(Rest, 1, M-1),
 		    {ok, ChannelOwner}
 	    end
+    end.
+
+find_error_reason(Body) ->
+    StartPattern = "ytInitialPlayerResponse =",
+    PL = length(StartPattern),
+    case string:str(Body, StartPattern) of
+	0 ->
+	    no_channel_cause_no_player_response;
+	N ->
+	    Rest = lists:sublist(Body, N+PL, 10000),
+	    EndPattern = ";",
+	    case string:str(Rest, EndPattern) of
+		0 ->
+		    no_channel_cause_no_end_of_player_response;
+		M ->
+		    InitialPlayerResponseJSON = lists:sublist(Rest, 1, M-1),
+		    InitialPlayerResponseJSONbinary =
+			unicode:characters_to_binary(InitialPlayerResponseJSON),
+		    try InitialPlayerResponse =
+			     jsx:decode(InitialPlayerResponseJSONbinary),
+			 ErrorReason =
+			     extract_error_reason(InitialPlayerResponse),
+			 ErrorReason
+		    catch _:_ ->
+			    no_channel_cause_could_not_decode_player_response
+		    end
+	    end
+    end.
+
+extract_error_reason(IPR) ->
+    case maps:get(<<"playabilityStatus">>, IPR, not_found) of
+	not_found ->
+	    <<"no_channel: cannot_find_playability_status">>;
+	PS ->
+	    Reason = maps:get(<<"reason">>, PS, "unknown"),
+	    ES = maps:get(<<"errorScreen">>, PS, #{}),
+	    PEMR = maps:get(<<"playerErrorMessageRenderer">>, ES, #{}),
+	    SubreasonContainer = maps:get(<<"subreason">>, PEMR, #{}),
+	    Subreason = maps:get(<<"simpleText">>,
+				 SubreasonContainer,
+				 "unknown"),
+	    iolist_to_binary(["no_channel: reason=", Reason,
+			      " subreason=", Subreason])
     end.
 
 read_json(File) ->
