@@ -94,7 +94,7 @@ traverse(Dir, Fun, Acc) ->
     filelib:fold_files(Dir, ".*\.url$", true, Fun, Acc).
 
 analyze_file(Filepath, {BaseLen, Num, Acc, Cache, ErrorCache}) ->
-    erlang:display(Num),
+    io:format("\r~8p: ", [Num]),
     {_,RelFilepath} = lists:split(BaseLen, Filepath),
     RelDir = filename:dirname(RelFilepath),
     Filename = filename:basename(RelFilepath, ".url"),
@@ -131,23 +131,23 @@ analyze_file(Filepath, {BaseLen, Num, Acc, Cache, ErrorCache}) ->
 	    {CacheWhere, CachedItem} =
 		case get_channel(Url, Cache, ErrorCache) of
 		    {cached, Item} ->
-			%% erlang:display({cached, Item}),
+			%% io:format("~p~n", [{cached, Item}]),
 			{nowhere,
 			 Item};
 		    {ok, {Channel, Owner}} ->
-			erlang:display({ok, {Artist,
-					     Channel,
-					     MaybeSong,
-					     IsReaction}}),
+			io:format("~p~n", [{ok, {Artist,
+						 Channel,
+						 MaybeSong,
+						 IsReaction}}]),
 			{cache,
 			 #{<<"result">> => ok,
 			   <<"channel">> => Channel,
 			   <<"owner">> => Owner}};
 		    {error, Reason} ->
-			erlang:display({error, {channel_failed,
-						Url,
-						Artist,
-						Reason}}),
+			io:format("~p~n", [{error, {channel_failed,
+						    Url,
+						    Artist,
+						    Reason}}]),
 			{error_cache,
 			 #{<<"result">> => channel_failed,
 			   <<"reason">> => Reason,
@@ -167,10 +167,10 @@ analyze_file(Filepath, {BaseLen, Num, Acc, Cache, ErrorCache}) ->
 		end,
 	    {BaseLen , Num+1, Acc#{BinaryNum => Map}, NewCache, NewErrorCache};
 	{error, Reason} ->
-	    erlang:display({error, {url_failed,
-				    Artist,
-				    Reason,
-				    Filename}}),
+	    io:format("~p~n", [{error, {url_failed,
+					Artist,
+					Reason,
+					Filename}}]),
 	    Map0#{<<"result">> => url_failed,
 		  <<"reason">> => Reason}
     end.
@@ -329,11 +329,11 @@ read_json(File) ->
 	{ok, Json} ->
 	    try jsx:decode(Json)
 	    catch _:_ ->
-		    erlang:display({parsing_json_failed, File}),
+		    io:format("~p~n", [{parsing_json_failed, File}]),
 		    #{}
 	    end;
 	{error, _} ->
-	    erlang:display({no_json_file, File}),
+	    io:format("~p~n", [{no_json_file, File}]),
 	    #{}
     end.
 
