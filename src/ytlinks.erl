@@ -150,10 +150,7 @@ analyze_file(Filepath, {BaseLen, Num, Acc, Cache, ErrorCache}) ->
 						    Reason}}]),
 			{error_cache,
 			 #{<<"result">> => channel_failed,
-			   <<"reason">> => Reason,
-			   %% Two duplicates to help error searching
-			   <<"num">> => BinaryNum,
-			   <<"rel_filepath">> => unicode:characters_to_binary(RelFilepath)}}
+			   <<"reason">> => Reason}}
 		end,
 	    Map = maps:merge(Map1, CachedItem),
 	    {NewCache, NewErrorCache} =
