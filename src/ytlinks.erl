@@ -36,11 +36,7 @@ run(BaseDir) ->
 
     #{<<"analyze_time">> => US1/1000000,
       <<"build_indices_time">> => US2/1000000,
-      <<"num">> => Num,
-      <<"table">> => Table,
-      <<"cache">> => Cache,
-      <<"error_cache">> => ErrorCache,
-      <<"indices">> => Indices}.
+      <<"num">> => Num}.
 
 analyze() ->
     analyze(base_dir()).
