@@ -1,9 +1,21 @@
 -module(ytlinks).
 
--export([run/0, run/1, analyze/0, analyze/1]).
+%% API
+
+-export([run/0,
+	 run_including_cached/0]).
+
+%% API running with empty cache, saving nothing
+
+-export([analyze/0,
+	 analyze_including_cached/0]).
+
+%% Tests
 
 -export([test_run/0,
+	 test_run_including_cached/0,
 	 test_analyze/0,
+	 test_analyze_including_cached/0,
 	 test_traverse_add/0,
 	 test_traverse_sum/0,
 	 test_file/0,
@@ -14,19 +26,34 @@
 %% API
 
 run() ->
-    run(base_dir()).
+    run(base_dir(), ignoreore_cached).
 
-run(BaseDir) ->
+run_including_cached() ->
+    run(base_dir(), include_cached).
+
+%% API running with empty cache, saving nothing
+
+analyze() ->
+    analyze(base_dir(), exclude_cached).
+
+analyze_including_cached() ->
+    analyze(base_dir(), include_cached).
+
+analyze(BaseDir, Mode) ->
+    {_, Cache,
+     _, ErrorCache} = get_cache(BaseDir),
+    analyze(BaseDir, Mode, Cache, ErrorCache).
+
+%% Internal API
+
+run(BaseDir, Mode) ->
     TableJsonFile = filename:join([BaseDir, "table.json"]),
     IndicesJsonFile = filename:join([BaseDir, "indices.json"]),
-    CacheJsonFile = filename:join([BaseDir, "cache.json"]),
-    ErrorCacheJsonFile = filename:join([BaseDir, "error_cache.json"]),
+    {CacheJsonFile, Cache0,
+     ErrorCacheJsonFile, ErrorCache0} = get_cache(BaseDir),
 
-    Cache0 = read_json(CacheJsonFile),
-    ErrorCache0 = read_json(ErrorCacheJsonFile),
-
-    {US1, {_, Num, Table, Cache, ErrorCache}} =
-	timer:tc(fun() -> analyze(BaseDir, Cache0, ErrorCache0) end),
+    {US1, {_, Num, _, _, Table, Cache, ErrorCache}} =
+	timer:tc(fun() -> analyze(BaseDir, Mode, Cache0, ErrorCache0) end),
     {US2, Indices} = timer:tc(fun() -> build_indices(Table) end),
 
     write_json(TableJsonFile, Table),
@@ -38,15 +65,21 @@ run(BaseDir) ->
       <<"build_indices_time">> => US2/1000000,
       <<"num">> => Num}.
 
-analyze() ->
-    analyze(base_dir()).
+get_cache(BaseDir) ->
+    CacheJsonFile = filename:join([BaseDir, "cache.json"]),
+    ErrorCacheJsonFile = filename:join([BaseDir, "error_cache.json"]),
+    Cache = read_json(CacheJsonFile),
+    ErrorCache = read_json(ErrorCacheJsonFile),
+    {CacheJsonFile, Cache, ErrorCacheJsonFile, ErrorCache}.
 
-analyze(BaseDir) ->
-    analyze(BaseDir, #{}, #{}).
-
-analyze(BaseDir, Cache, ErrorCache) ->
+analyze(BaseDir, Mode, Cache, ErrorCache) ->
+    SysTime = erlang:system_time(second),
+    StrTime = calendar:system_time_to_rfc3339(SysTime),
+    Time = unicode:characters_to_binary(StrTime),
     BaseLen = length(BaseDir) + 1,
-    traverse(BaseDir, fun analyze_file/2, {BaseLen, 0, #{}, Cache, ErrorCache}).
+    traverse(BaseDir,
+	     fun analyze_file/2,
+	     {BaseLen, Mode, Time, 0, #{}, Cache, ErrorCache}).
 
 build_indices(DB) ->
     maps:fold(fun insert_indices/3, #{}, DB).
@@ -67,10 +100,16 @@ insert_index(K, V, {Num, OldIndices}) ->
 %% TEST-API
 
 test_run() ->
-    run(test_base_dir()).
+    run(test_base_dir(), exclude_cached).
+
+test_run_including_cached() ->
+    run(test_base_dir(), include_cached).
 
 test_analyze() ->
-    analyze(test_base_dir()).
+    analyze(test_base_dir(), exclude_cached).
+
+test_analyze_including_cached() ->
+    analyze(test_base_dir(), include_cached).
 
 test_traverse_add() ->
     traverse(base_dir(), fun add/2, []).
@@ -89,7 +128,7 @@ test_file2() ->
 traverse(Dir, Fun, Acc) ->
     filelib:fold_files(Dir, ".*\.url$", true, Fun, Acc).
 
-analyze_file(Filepath, {BaseLen, Num, Acc, Cache, ErrorCache}) ->
+analyze_file(Filepath, {BaseLen, Mode, Time, Num, Acc, Cache, ErrorCache}) ->
     io:format("\r~8p: ", [Num]),
     {_,RelFilepath} = lists:split(BaseLen, Filepath),
     RelDir = filename:dirname(RelFilepath),
@@ -125,7 +164,7 @@ analyze_file(Filepath, {BaseLen, Num, Acc, Cache, ErrorCache}) ->
 	{ok, Url} ->
 	    Map1 = Map0#{<<"url">> => Url},
 	    {CacheWhere, CachedItem} =
-		case get_channel(Url, Cache, ErrorCache) of
+		case get_channel(Url, Mode, Cache, ErrorCache) of
 		    {cached, Item} ->
 			%% io:format("~p~n", [{cached, Item}]),
 			{nowhere,
@@ -138,7 +177,8 @@ analyze_file(Filepath, {BaseLen, Num, Acc, Cache, ErrorCache}) ->
 			{cache,
 			 #{<<"result">> => ok,
 			   <<"channel">> => Channel,
-			   <<"owner">> => Owner}};
+			   <<"owner">> => Owner,
+			   <<"time">> => Time}};
 		    {error, Reason} ->
 			io:format("~p~n", [{error, {channel_failed,
 						    Url,
@@ -146,7 +186,8 @@ analyze_file(Filepath, {BaseLen, Num, Acc, Cache, ErrorCache}) ->
 						    Reason}}]),
 			{error_cache,
 			 #{<<"result">> => channel_failed,
-			   <<"reason">> => Reason}}
+			   <<"reason">> => Reason,
+			   <<"time">> => Time}}
 		end,
 	    Map = maps:merge(Map1, CachedItem),
 	    {NewCache, NewErrorCache} =
@@ -158,7 +199,7 @@ analyze_file(Filepath, {BaseLen, Num, Acc, Cache, ErrorCache}) ->
 		    nowhere ->
 			{Cache, ErrorCache}
 		end,
-	    {BaseLen , Num+1, Acc#{BinaryNum => Map}, NewCache, NewErrorCache};
+	    {BaseLen , Mode, Time, Num+1, Acc#{BinaryNum => Map}, NewCache, NewErrorCache};
 	{error, Reason} ->
 	    io:format("~p~n", [{error, {url_failed,
 					Artist,
@@ -175,6 +216,14 @@ get_it_all(Filepath) ->
 
 get_channel(Url) ->
     get_channel(Url, #{}, #{}).
+
+get_channel(Url, Mode, Cache, ErrorCache) ->
+    case Mode of
+	exclude_cached ->
+	    get_channel(Url, Cache, ErrorCache);
+	include_cached ->
+	    get_channel_remote(Url)
+    end.
 
 get_channel(Url, Cache, ErrorCache) ->
     case get_cached_channel(Url, Cache, ErrorCache) of
