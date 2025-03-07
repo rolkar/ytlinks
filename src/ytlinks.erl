@@ -26,7 +26,7 @@
 %% API
 
 run() ->
-    run(base_dir(), ignoreore_cached).
+    run(base_dir(), exclude_cached).
 
 run_including_cached() ->
     run(base_dir(), include_cached).
