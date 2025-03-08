@@ -302,9 +302,13 @@ find_channel(Body) ->
 		    {error, no_end_of_channel};
 		M ->
 		    Channel = lists:sublist(Rest, 1, M-1),
-		    {ok, ChannelOwner} = find_channel_owner(Rest),
-		    {ok, {unicode:characters_to_binary(Channel),
-			  unicode:characters_to_binary(ChannelOwner)}}
+		    case find_channel_owner(Rest) of
+			{ok, ChannelOwner} ->
+			    {ok, {unicode:characters_to_binary(Channel),
+				  unicode:characters_to_binary(ChannelOwner)}};
+			{error, Error} ->
+			    {error, Error}
+		    end
 	    end
     end.
 
