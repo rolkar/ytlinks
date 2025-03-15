@@ -52,7 +52,7 @@ run(BaseDir, Mode) ->
     {CacheJsonFile, Cache0,
      ErrorCacheJsonFile, ErrorCache0} = get_cache(BaseDir),
 
-    {US1, {_, _, Num, _, Table, Cache, ErrorCache}} =
+    {US1, {_, _, _, Num, Table, Cache, ErrorCache}} =
 	timer:tc(fun() -> analyze(BaseDir, Mode, Cache0, ErrorCache0) end),
     {US2, Indices} = timer:tc(fun() -> build_indices(Table) end),
 
