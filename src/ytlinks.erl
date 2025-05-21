@@ -391,7 +391,7 @@ write_json(File, Data) ->
     file:write_file(File, Json).
 
 base_dir() ->
-    "/mnt/c/Users/roland/Desktop/musik".
+    "/mnt/f/music/YouTube".
 
 test_base_dir() ->
     "./test_base_dir".
